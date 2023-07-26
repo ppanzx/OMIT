@@ -1,0 +1,102 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "train_grid_butd",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--data_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/f30k",
+                "--data_name=f30k",
+                "--vocab_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/vocab",
+                "--logger_name=scripts/runs/ablation/log","--model_name=scripts/runs/ablation/test",
+                "--num_epochs=25","--lr_update=15","--learning_rate=1e-3","--precomp_enc_type=backbone","--workers=16",
+                "--backbone_source=detector","--vse_mean_warmup_epochs=0","--backbone_warmup_epochs=0","--embedding_warmup_epochs=0",
+                "--optim=adam","--visual_lr_factor=0.01","--log_step=1","--batch_size=8",
+                "--backbone_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/weights/original_updown_backbone.pth",
+                "--aggr_type=cosine","--coding_type=SA", "--alpha=0.1", "--pooling_type=LSEPooling", "--belta=0.1",
+                "--mask","--visual_mask_ratio=0.2","--criterion=ContrastiveLoss", "--margin=0.2", "--seed=2023",
+            ]
+        },
+        {
+            "name": "train_grid_clip",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--data_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/f30k",
+                "--data_name=f30k",
+                "--vocab_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/vocab",
+                "--logger_name=scripts/runs/ablation/log","--model_name=scripts/runs/ablation/test",
+                "--precomp_enc_type=clip","--text_enc_type=clip",
+                "--num_epochs=25","--lr_update=15","--learning_rate=1e-3","--workers=16",
+                "--backbone_source=detector","--vse_mean_warmup_epochs=1","--backbone_warmup_epochs=0","--embedding_warmup_epochs=0",
+                "--optim=adam","--visual_lr_factor=1e-5","--text_lr_factor=1e-4","--log_step=1","--batch_size=8",
+                "--input_scale_factor=2.0", 
+                "--backbone_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/weights/original_updown_backbone.pth",
+                "--aggr_type=cosine","--coding_type=SA", "--alpha=0.1", "--pooling_type=LSEPooling", "--belta=0.1",
+                "--mask","--visual_mask_ratio=0.2", "--seed=2023",
+                // "--criterion=InfoNCELoss", "--temperature=0.07", 
+                "--criterion=ContrastiveLoss", "--margin=0.2", 
+                // "--resume=./scripts/ckpts/coco_CHAN_butd_ft/model_best.pth"
+            ]
+        },
+        {
+            "name": "train_grid_res152",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--data_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/f30k",
+                "--data_name=f30k",
+                "--vocab_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/vocab",
+                "--logger_name=scripts/runs/ablation/log","--model_name=scripts/runs/ablation/test",
+                "--num_epochs=25","--lr_update=15","--learning_rate=.0005","--precomp_enc_type=backbone","--workers=16",
+                "--backbone_source=imagenet_res152","--vse_mean_warmup_epochs=1","--backbone_warmup_epochs=0","--embedding_warmup_epochs=1",
+                "--optim=adam","--visual_lr_factor=0.01","--log_step=1","--batch_size=32",
+                "--input_scale_factor=1.0", 
+                // "--backbone_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/weights/original_updown_backbone.pth",
+                "--aggr_type=coding","--coding_type=CC", "--alpha=0.1", "--pooling_type=LSEPooling", "--belta=0.1",
+                // "--resume=./scripts/ckpts/coco_CHAN_butd_ft/model_best.pth"
+            ]
+        },
+        {
+            "name": "debug_grid_wasserstain",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--data_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/f30k",
+                "--data_name=f30k",
+                "--vocab_path=/media/panzx/新加卷/PanZhengxin/datasets/CrossModalRetrieval/vocab",
+                "--logger_name=scripts/runs/ablation/log","--model_name=scripts/runs/ablation/test",
+                "--num_epochs=25","--lr_update=15","--learning_rate=.0005","--precomp_enc_type=backbone","--workers=16",
+                "--backbone_source=imagenet_res152","--vse_mean_warmup_epochs=1","--backbone_warmup_epochs=0","--embedding_warmup_epochs=1",
+                "--optim=adam","--visual_lr_factor=0.01","--log_step=1","--batch_size=8",
+                "--input_scale_factor=2.0", 
+                "--backbone_path=/home/panzx/.cache/torch/hub/checkpoints/resnet152-394f9c45.pth",
+                "--aggr_type=ot","--aggr_type=coding","--coding_type=CC", "--alpha=0.1", "--pooling_type=LSEPooling", "--belta=0.1",
+                // "--resume=./scripts/ckpts/f30k_ot_butd_ft/checkpoint.pth"
+            ]
+        },
+        {
+            "name": "eval_grid",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "--dataset=f30k", "--model_path=runs/test/model_best.pth", 
+                "--data_path=../SCAN/data/f30k",
+            ]
+        },
+    ]
+}
