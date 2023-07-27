@@ -127,7 +127,7 @@ def main():
             if epoch < opt.embedding_warmup_epochs:
                 logger.info('Warm up the embedding layers')
             elif epoch < opt.embedding_warmup_epochs + opt.backbone_warmup_epochs:
-                model.unfreeze_backbone(3)  # only train the last block of resnet backbone
+                model.unfreeze_backbone(3)  # only train the last block of backbone
             elif epoch < opt.embedding_warmup_epochs + opt.backbone_warmup_epochs * 2:
                 model.unfreeze_backbone(2)
             elif epoch < opt.embedding_warmup_epochs + opt.backbone_warmup_epochs * 3:

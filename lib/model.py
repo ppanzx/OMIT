@@ -117,17 +117,36 @@ class Model(object):
                 else:
                     raise ValueError('Invalid optim option {}'.format(self.opt.optim))
         elif opt.text_enc_type == 'clip':
-            params_except = ["visual.proj", "visual.ln_post", "ln_final","text_projection"]
+            # all_params_text = self.txt_enc.named_parameters()
+            # all_params_visual = self.img_enc.named_parameters()
 
-            clip_params_text = self.txt_enc.parameters()
-            clip_params_visual = self.img_enc.parameters()
-            clip_params_ft = [v for k,v in self.txt_enc.named_modules() if k in params_except] + \
-                            [v for k,v in self.img_enc.named_modules() if k in params_except]
+            # clip_params_text = [p for n, p in all_params_text if "clip." in n]
+            # clip_params_visual = [p for n, p in all_params_visual if "clip." in n]
+            # no_clip_params_text = [p for n, p in all_params_text if "clip." not in n]
+            # no_clip_params_visual = [p for n, p in all_params_visual if "clip." not in n]
+
+            all_text_params = list(self.txt_enc.parameters())
+            text_params_clip = list(self.txt_enc.clip.parameters())
+            text_clip_params_ptr = [p.data_ptr() for p in text_params_clip]
+            text_params_no_clip = list()
+            for p in all_text_params:
+                if p.data_ptr() not in text_clip_params_ptr:
+                    text_params_no_clip.append(p)
+
+            all_visual_params = list(self.img_enc.parameters())
+            visual_params_clip = list(self.img_enc.clip.parameters())
+            visual_clip_params_ptr = [p.data_ptr() for p in visual_params_clip]
+            visual_params_no_clip = list()
+            for p in all_visual_params:
+                if p.data_ptr() not in visual_clip_params_ptr:
+                    visual_params_no_clip.append(p)
 
             ## optimizer
             self.optimizer = torch.optim.AdamW([
-                {'params': clip_params_text, 'lr': opt.learning_rate * opt.text_lr_factor},
-                {'params': clip_params_visual,'lr': opt.learning_rate * opt.visual_lr_factor, },
+                {'params': text_params_no_clip, 'lr': opt.learning_rate,},
+                {'params': visual_params_no_clip, 'lr': opt.learning_rate,},
+                {'params': text_params_clip, 'lr': opt.learning_rate * opt.text_lr_factor,},
+                {'params': visual_params_clip,'lr': opt.learning_rate * opt.visual_lr_factor,},
             ], lr=opt.learning_rate, weight_decay=decay_factor)
         else:
             raise ValueError("Unknown precomp_enc_type: {}".format(opt.ext_enc_type))
@@ -249,7 +268,7 @@ class Model(object):
         self.logger.update('Le', loss.data.item(), sims.size(0))
         return loss
 
-    @autocast()
+    # @autocast()
     def train_emb(self, images, captions, lengths, image_lengths=None, warmup_alpha=None):
         """One training step given images and captions.
         """

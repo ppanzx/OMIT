@@ -10,9 +10,11 @@ import sys
 from collections import OrderedDict
 from transformers import BertTokenizer
 
-from lib.datasets import image_caption_bigru,image_caption_bert
+from lib.datasets import image_caption_bigru,image_caption_bert,image_caption_clip
 from lib.model import Model
 from lib.vocab import deserialize_vocab
+from clip.clip import _transform
+from clip.simple_tokenizer import SimpleTokenizer as _Tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -253,6 +255,15 @@ def evalrank(model_path, data_path=None, split='dev', fold5=False, save_path=Non
         logger.info('Loading dataset')
         data_loader = image_caption_bert.get_test_loader(split, opt.data_name, tokenizer,
                                                 opt.batch_size, opt.workers, opt)
+    elif opt.text_enc_type=="clip":
+        transform = _transform(224)
+        tokenizer = _Tokenizer()
+        vocab = tokenizer.vocab
+        opt.vocab_size = len(vocab)
+        opt.word2idx = None
+        logger.info('Loading dataset')
+        train_loader, val_loader = image_caption_clip.get_loaders(
+            opt.data_path, opt.data_name, tokenizer, transform, opt.batch_size, opt.workers, opt)
     else:
         raise ValueError("Unknown precomp_enc_type: {}".format(opt.ext_enc_type))
 

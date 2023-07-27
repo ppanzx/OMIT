@@ -177,18 +177,22 @@ class EncoderImageCLIP(nn.Module):
         self.no_imgnorm = no_imgnorm
         self.mask_ratio = mask_ratio
         self.fixed_blocks = fixed_blocks
-        self.dtype = clip_model.dtype
+        # self.dtype = clip_model.dtype
+        self.dtype = torch.float32
 
-        self.visual = clip_model.visual
-        if embed_size!=self.visual.output_dim:
-            width = self.visual.proj.shape[0]
+        self.clip = clip_model.visual.to(self.dtype)
+        if embed_size!=self.clip.output_dim:
+            width = self.clip.proj.shape[0]
             scale = width ** -0.5
-            # self.visual.proj = nn.Identity()
-            self.visual.proj = nn.Parameter(scale * torch.randn(width, embed_size))
+            self.proj = nn.Parameter(scale * torch.randn(width, embed_size)).to(self.dtype)
+        else:
+            self.proj = nn.Parameter(clip_model.visual.proj.data.to(dtype=self.dtype))
+            
+        self.freeze_backbone()
 
     def forward(self, x: torch.Tensor, feat_lengths, return_hidden=False):
         ## patchify
-        x = self.visual.conv1(x.type(self.dtype))  # shape = [*, width, grid, grid]
+        x = self.clip.conv1(x.type(self.dtype))  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
 
@@ -200,16 +204,16 @@ class EncoderImageCLIP(nn.Module):
             feat_lengths = torch.zeros(x.size(0)).to(x.device)
             feat_lengths[:] = x.size(1)
 
-        x = torch.cat([self.visual.class_embedding.to(x.dtype) + torch.zeros(x.shape[0], 1, x.shape[-1], 
+        x = torch.cat([self.clip.class_embedding + torch.zeros(x.shape[0], 1, x.shape[-1], 
                         dtype=x.dtype, device=x.device), x], dim=1)  # shape = [*, grid ** 2 + 1, width]
-        x = x + self.visual.positional_embedding[:x.shape[1]].to(x.dtype)
-        x = self.visual.ln_pre(x)
+        x = x + self.clip.positional_embedding[:x.shape[1]]
+        x = self.clip.ln_pre(x)
 
         x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.visual.transformer(x)
+        x = self.clip.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
-        x = self.visual.ln_post(x) 
-        hidden = x.type(self.visual.proj.dtype) @ self.visual.proj
+        x = self.clip.ln_post(x) 
+        hidden = x @ self.proj
 
         if not self.no_imgnorm:
             hidden = l2norm(hidden, dim=-1)
@@ -251,43 +255,43 @@ class EncoderImageCLIP(nn.Module):
     def unfreeze_base(self, ):
         assert (0 <= self.fixed_blocks < 4)
         if self.fixed_blocks == 3:
-            for p in self.visual.transformer.resblocks[10:12].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[8:10].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[6:8].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[4:6].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[2:4].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[0:2].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[10:12].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[8:10].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[6:8].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[4:6].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[2:4].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[0:2].parameters(): p.requires_grad = False
         elif self.fixed_blocks == 2:
-            for p in self.visual.transformer.resblocks[10:12].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[8:10].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[6:8].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[4:6].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[2:4].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[0:2].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[10:12].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[8:10].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[6:8].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[4:6].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[2:4].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[0:2].parameters(): p.requires_grad = False
         elif self.fixed_blocks == 1:
-            for p in self.visual.transformer.resblocks[10:12].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[8:10].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[6:8].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[4:6].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[2:4].parameters(): p.requires_grad = False
-            for p in self.visual.transformer.resblocks[0:2].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[10:12].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[8:10].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[6:8].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[4:6].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[2:4].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[0:2].parameters(): p.requires_grad = False
         elif self.fixed_blocks == 0:
-            for p in self.visual.transformer.resblocks[10:12].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[8:10].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[6:8].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[4:6].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[2:4].parameters(): p.requires_grad = True
-            for p in self.visual.transformer.resblocks[0:2].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[10:12].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[8:10].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[6:8].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[4:6].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[2:4].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[0:2].parameters(): p.requires_grad = True
             for p in self.parameters():
                 p.requires_grad = True
 
-        logger.info('Resnet backbone now has fixed blocks {}'.format(self.fixed_blocks))
+        logger.info('CLIP backbone now has fixed blocks {}'.format(self.fixed_blocks))
 
     def freeze_base(self):
         for p in self.parameters():
             p.requires_grad = False
-        for p in self.visual.ln_post.parameters(): p.requires_grad = True
-        self.visual.proj.requires_grad = True
+        # for p in self.visual.ln_post.parameters(): p.requires_grad = True
+        self.proj.requires_grad = True
 
     def set_fixed_blocks(self, fixed_blocks):
         self.fixed_blocks = fixed_blocks
@@ -298,12 +302,12 @@ class EncoderImageCLIP(nn.Module):
     def freeze_backbone(self):
         for param in self.parameters():
             param.requires_grad = False
-        for p in self.visual.ln_post.parameters(): p.requires_grad = True
-        self.visual.proj.requires_grad = True
+        # for p in self.visual.ln_post.parameters(): p.requires_grad = True
+        self.proj.requires_grad = True
         logger.info('Visual CLIP freezed.')
 
     def unfreeze_backbone(self, fixed_blocks):
-        for param in self.visual.parameters():  # open up all params first, then adjust the base parameters
+        for param in self.clip.transformer.parameters():  # open up all params first, then adjust the base parameters
             param.requires_grad = True
         self.set_fixed_blocks(fixed_blocks)
         self.unfreeze_base()
@@ -416,33 +420,35 @@ class EncoderTextCLIP(nn.Module):
         self.embed_size = embed_size
         self.no_txtnorm = no_txtnorm
         self.fixed_blocks = fixed_blocks
-        self.dtype = clip_model.dtype
+        # self.dtype = clip_model.dtype
+        self.dtype = torch.float32
         
-        self.transformer = clip_model.transformer
-        self.token_embedding = clip_model.token_embedding
-        self.positional_embedding = clip_model.positional_embedding
-        self.ln_final = clip_model.ln_final
+        self.clip = nn.ModuleList(modules=None)
+        self.clip.transformer = clip_model.transformer.to(self.dtype)
+        self.clip.token_embedding = clip_model.token_embedding.to(self.dtype)
+        self.clip.positional_embedding = clip_model.positional_embedding.to(self.dtype)
+        self.clip.ln_final = clip_model.ln_final.to(self.dtype)
 
         transformer_width = clip_model.transformer.width
         output_dim = clip_model.text_projection.shape[0]
         if embed_size!=output_dim:
-            self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_size))
+            self.proj = nn.Parameter(torch.empty(transformer_width, embed_size)).to(self.dtype)
+            nn.init.normal_(self.proj, std=transformer_width ** -0.5)
         else:
-            self.text_projection = nn.Parameter(torch.empty(transformer_width, output_dim))
+            self.proj = nn.Parameter(clip_model.text_projection.data.to(dtype=self.dtype))
 
-        if self.text_projection is not None:
-            nn.init.normal_(self.text_projection, std=transformer_width ** -0.5)
+        self.freeze_backbone()
 
     def forward(self, text, lengths, return_hidden=False):
-        x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
+        x = self.clip.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
-        pos_emd = self.positional_embedding[:x.size(1), :].type(self.dtype)
+        pos_emd = self.clip.positional_embedding[:x.size(1), :]
         x = x + pos_emd
         x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.transformer(x)
+        x = self.clip.transformer(x)
         x = x.permute(1, 0, 2)  # LND -> NLD
 
-        hidden = self.ln_final(x).type(self.text_projection.dtype) @ self.text_projection
+        hidden = self.clip.ln_final(x) @ self.proj
 
         if not self.no_txtnorm:
             hidden = l2norm(hidden, dim=-1)
@@ -459,43 +465,43 @@ class EncoderTextCLIP(nn.Module):
     def unfreeze_base(self):
         assert (0 <= self.fixed_blocks < 4)
         if self.fixed_blocks == 3:
-            for p in self.transformer.resblocks[10:12].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[8:10].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[6:8].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[4:6].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[2:4].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[0:2].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[10:12].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[8:10].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[6:8].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[4:6].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[2:4].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[0:2].parameters(): p.requires_grad = False
         elif self.fixed_blocks == 2:
-            for p in self.transformer.resblocks[10:12].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[8:10].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[6:8].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[4:6].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[2:4].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[0:2].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[10:12].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[8:10].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[6:8].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[4:6].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[2:4].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[0:2].parameters(): p.requires_grad = False
         elif self.fixed_blocks == 1:
-            for p in self.transformer.resblocks[10:12].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[8:10].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[6:8].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[4:6].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[2:4].parameters(): p.requires_grad = False
-            for p in self.transformer.resblocks[0:2].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[10:12].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[8:10].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[6:8].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[4:6].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[2:4].parameters(): p.requires_grad = False
+            for p in self.clip.transformer.resblocks[0:2].parameters(): p.requires_grad = False
         elif self.fixed_blocks == 0:
-            for p in self.transformer.resblocks[10:12].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[8:10].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[6:8].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[4:6].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[2:4].parameters(): p.requires_grad = True
-            for p in self.transformer.resblocks[0:2].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[10:12].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[8:10].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[6:8].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[4:6].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[2:4].parameters(): p.requires_grad = True
+            for p in self.clip.transformer.resblocks[0:2].parameters(): p.requires_grad = True
             for p in self.parameters():
                 p.requires_grad = True
 
-        logger.info('Resnet backbone now has fixed blocks {}'.format(self.fixed_blocks))
+        logger.info('CLIP backbone now has fixed blocks {}'.format(self.fixed_blocks))
 
     def freeze_base(self):
         for p in self.parameters():
             p.requires_grad = False
-        for p in self.ln_final.parameters(): p.requires_grad = True
-        self.text_projection.requires_grad = True
+        # for p in self.clip.ln_final.parameters(): p.requires_grad = True
+        self.proj.requires_grad = True
 
     def set_fixed_blocks(self, fixed_blocks):
         self.fixed_blocks = fixed_blocks
@@ -506,12 +512,12 @@ class EncoderTextCLIP(nn.Module):
     def freeze_backbone(self):
         for param in self.parameters():
             param.requires_grad = False
-        for p in self.ln_final.parameters(): p.requires_grad = True
-        self.text_projection.requires_grad = True
+        # for p in self.clip.ln_final.parameters(): p.requires_grad = True
+        self.proj.requires_grad = True
         logger.info('Textual CLIP freezed.')
 
     def unfreeze_backbone(self, fixed_blocks):
-        for param in self.transformer.parameters():  # open up all params first, then adjust the base parameters
+        for param in self.clip.transformer.parameters():  # open up all params first, then adjust the base parameters
             param.requires_grad = True
         self.set_fixed_blocks(fixed_blocks)
         self.unfreeze_base()
